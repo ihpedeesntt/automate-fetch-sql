@@ -1,0 +1,9 @@
+[project]
+name = "sqllab"
+version = "0.1.0"
+description = "Automate paginated Superset SQL Lab exports"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "playwright>=1.54.0",
+]
