@@ -1,4 +1,4 @@
-# Python-generated files
+/ex# Python-generated files
 __pycache__/
 *.py[oc]
 build/
@@ -12,6 +12,12 @@ wheels/
 # Local secrets/session config
 .env
 .chrome-sqllab-profile/
+.chrome-sqllab-cdp/
 
 # SQL Lab output
 output/
+pages/
+
+*.xlsx
+
+

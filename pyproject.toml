@@ -5,5 +5,6 @@ description = "Automate paginated Superset SQL Lab exports"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "openpyxl>=3.1.5",
     "playwright>=1.54.0",
 ]

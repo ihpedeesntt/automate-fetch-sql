@@ -3,9 +3,12 @@ import argparse
 import csv
 import json
 import os
+import random
 import re
 import sys
 import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +20,10 @@ OFFSET_RE = re.compile(
     r"OFFSET\s+(?:\d+\s*\*\s*\d+|\d+)\s+ROWS\s+FETCH\s+NEXT\s+\d+\s+ROWS\s+ONLY",
     re.IGNORECASE,
 )
+LIMIT_RE = re.compile(
+    r"LIMIT\s+(?:\d+\s*\*\s*\d+|\d+)\s*,\s*\d+",
+    re.IGNORECASE,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -25,13 +32,22 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--env", default=".env")
     parser.add_argument("--output-dir", default="output")
     parser.add_argument("--page-size", type=int, default=1000)
+    parser.add_argument("--pagination", choices=("offset", "limit"), default="offset")
     parser.add_argument("--timeout", type=int, default=300)
+    parser.add_argument("--reload-after", type=int, default=120)
+    parser.add_argument("--reload-wait-min", type=float, default=3)
+    parser.add_argument("--reload-wait-max", type=float, default=15)
+    parser.add_argument("--delay", type=float, default=3)
     parser.add_argument("--max-retries", type=int, default=3)
     parser.add_argument("--max-pages", type=int)
+    parser.add_argument("--batch-pages", type=int)
     parser.add_argument("--save-json", action="store_true")
+    parser.add_argument("--manual-start", action="store_true")
     parser.add_argument("--resume", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--show-browser", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--chrome-profile")
+    parser.add_argument("--chrome-profile-directory")
+    parser.add_argument("--cdp-url")
     parser.add_argument("--no-sandbox", action="store_true")
     parser.add_argument("--self-check", action="store_true")
     return parser.parse_args()
@@ -63,6 +79,20 @@ def set_offset_sql(sql: str, page_index: int, page_size: int) -> str:
     return OFFSET_RE.sub(clause, sql, count=1)
 
 
+def set_limit_sql(sql: str, page_index: int, page_size: int) -> str:
+    matches = list(LIMIT_RE.finditer(sql))
+    if len(matches) != 1:
+        raise ValueError(f"Expected exactly one LIMIT offset,count clause, found {len(matches)}")
+    clause = f"LIMIT {page_index * page_size}, {page_size}"
+    return LIMIT_RE.sub(clause, sql, count=1)
+
+
+def set_page_sql(sql: str, page_index: int, page_size: int, pagination: str) -> str:
+    if pagination == "limit":
+        return set_limit_sql(sql, page_index, page_size)
+    return set_offset_sql(sql, page_index, page_size)
+
+
 def output_paths(output_dir: str, sql_path: str) -> tuple[Path, Path, Path]:
     run_dir = Path(output_dir) / Path(sql_path).stem
     pages_dir = run_dir / "pages"
@@ -79,6 +109,14 @@ def load_checkpoint(path: Path, resume: bool) -> dict[str, Any]:
 
 def save_checkpoint(path: Path, checkpoint: dict[str, Any]) -> None:
     path.write_text(json.dumps(checkpoint, indent=2))
+
+
+def stop_reason(page_index: int, max_pages: int | None, batch_pages: int | None, start_page: int) -> str | None:
+    if max_pages is not None and page_index >= max_pages:
+        return f"Reached max-pages={max_pages}."
+    if batch_pages is not None and page_index >= start_page + batch_pages:
+        return f"Reached batch-pages={batch_pages}."
+    return None
 
 
 def rows_from_response(response: dict[str, Any]) -> list[dict[str, Any]]:
@@ -173,10 +211,44 @@ def click_run_and_wait_results(page: Any, timeout_ms: int) -> dict[str, Any]:
         raise RuntimeError(f"Results returned non-JSON HTTP {response.status}") from exc
 
 
-def fetch_page(page: Any, sql: str, page_index: int, page_size: int, timeout: int) -> dict[str, Any]:
-    set_editor_sql(page, set_offset_sql(sql, page_index, page_size))
+def fetch_page(page: Any, sql: str, page_index: int, page_size: int, timeout: int, reload_after: int, pagination: str) -> dict[str, Any]:
+    set_editor_sql(page, set_page_sql(sql, page_index, page_size, pagination))
     time.sleep(0.5)
-    return click_run_and_wait_results(page, timeout * 1000)
+    return click_run_and_wait_results(page, min(timeout, reload_after) * 1000)
+
+
+def open_sqllab(page: Any, timeout_error: Any) -> None:
+    page.goto(SQLLAB_URL, wait_until="domcontentloaded", timeout=120_000)
+    try:
+        page.wait_for_load_state("networkidle", timeout=120_000)
+    except timeout_error:
+        pass
+
+
+def first_page(context: Any) -> Any:
+    for page in context.pages:
+        if BASE_URL in page.url:
+            return page
+    return context.new_page()
+
+
+def check_cdp(cdp_url: str) -> None:
+    url = cdp_url.rstrip("/") + "/json/version"
+    try:
+        with urllib.request.urlopen(url, timeout=3) as response:
+            json.loads(response.read().decode("utf-8"))
+    except (OSError, urllib.error.URLError, json.JSONDecodeError) as exc:
+        raise RuntimeError(
+            f"Cannot reach Chrome DevTools at {url}. Close Chrome, start it with "
+            "`google-chrome --remote-debugging-port=9222 --user-data-dir=$HOME/.config/google-chrome`, "
+            "then verify `curl http://127.0.0.1:9222/json/version` works."
+        ) from exc
+
+
+def cdp_context(browser: Any) -> Any:
+    if not browser.contexts:
+        raise RuntimeError("CDP connected, but Chrome exposed no browser context. Restart Chrome with a real user-data-dir.")
+    return browser.contexts[0]
 
 
 def run(args: argparse.Namespace) -> int:
@@ -187,36 +259,55 @@ def run(args: argparse.Namespace) -> int:
         raise RuntimeError("Playwright is not installed. Run `uv sync` first.") from exc
 
     env = load_env(args.env)
+    cdp_url = args.cdp_url or env.get("SQLLAB_CDP_URL")
     profile = args.chrome_profile or env.get("SQLLAB_CHROME_PROFILE") or ".chrome-sqllab-profile"
+    profile_directory = args.chrome_profile_directory or env.get("SQLLAB_CHROME_PROFILE_DIRECTORY")
     sql = read_sql(args.sql)
-    _run_dir, pages_dir, checkpoint_path = output_paths(args.output_dir, args.sql)
+    run_dir, pages_dir, checkpoint_path = output_paths(args.output_dir, args.sql)
     checkpoint = load_checkpoint(checkpoint_path, args.resume)
+    start_page = int(checkpoint["next_page_index"])
+    print(f"sql={args.sql}")
+    print(f"output={run_dir}")
+    print(f"pages={pages_dir}")
+    print(f"checkpoint={checkpoint_path}")
+    print(f"start_page={start_page}")
+    if cdp_url:
+        print(f"cdp_url={cdp_url}")
 
     with sync_playwright() as playwright:
-        context = playwright.chromium.launch_persistent_context(
-            user_data_dir=profile,
-            channel="chrome",
-            headless=not args.show_browser,
-            args=["--no-sandbox"] if args.no_sandbox else [],
-        )
+        browser = None
+        if cdp_url:
+            check_cdp(cdp_url)
+            browser = playwright.chromium.connect_over_cdp(cdp_url)
+            context = cdp_context(browser)
+        else:
+            chrome_args = ["--no-sandbox"] if args.no_sandbox else []
+            if profile_directory:
+                chrome_args.append(f"--profile-directory={profile_directory}")
+            context = playwright.chromium.launch_persistent_context(
+                user_data_dir=profile,
+                channel="chrome",
+                headless=not args.show_browser,
+                args=chrome_args,
+            )
         try:
-            page = context.pages[0] if context.pages else context.new_page()
-            page.goto(SQLLAB_URL, wait_until="domcontentloaded", timeout=120_000)
-            try:
-                page.wait_for_load_state("networkidle", timeout=120_000)
-            except PlaywrightTimeoutError:
-                pass
+            page = first_page(context)
+            open_sqllab(page, PlaywrightTimeoutError)
+            if args.manual_start:
+                input("Log in/check SQL Lab, then press Enter to start...")
 
             while True:
                 page_index = int(checkpoint["next_page_index"])
-                if args.max_pages is not None and page_index >= args.max_pages:
-                    print(f"Reached max-pages={args.max_pages}.")
+                reason = stop_reason(page_index, args.max_pages, args.batch_pages, start_page)
+                if reason:
+                    print(reason)
                     return 0
 
                 response = retry_page(
                     args,
-                    lambda: fetch_page(page, sql, page_index, args.page_size, args.timeout),
+                    lambda: fetch_page(page, sql, page_index, args.page_size, args.timeout, args.reload_after, args.pagination),
                     page_index,
+                    lambda: open_sqllab(page, PlaywrightTimeoutError),
                 )
                 rows = rows_from_response(response)
                 page_base = pages_dir / f"page-{page_index:04d}"
@@ -233,15 +324,17 @@ def run(args: argparse.Namespace) -> int:
                 }
                 save_checkpoint(checkpoint_path, checkpoint)
                 print(f"page={page_index} offset={page_index * args.page_size} rows={len(rows)} total={checkpoint['total_rows']}")
+                time.sleep(args.delay)
 
                 if len(rows) < args.page_size:
                     print("Last page reached.")
                     return 0
         finally:
-            context.close()
+            if not cdp_url:
+                context.close()
 
 
-def retry_page(args: argparse.Namespace, task: Any, page_index: int) -> dict[str, Any]:
+def retry_page(args: argparse.Namespace, task: Any, page_index: int, on_retry: Any = None) -> dict[str, Any]:
     for attempt in range(1, args.max_retries + 1):
         try:
             return task()
@@ -251,8 +344,10 @@ def retry_page(args: argparse.Namespace, task: Any, page_index: int) -> dict[str
             if non_retry or attempt >= args.max_retries:
                 print(f"Page {page_index} failed: {exc}", file=sys.stderr)
                 raise
-            sleep_seconds = min(30, attempt * 3)
-            print(f"Page {page_index} attempt {attempt} failed: {exc}. Retrying in {sleep_seconds}s...", file=sys.stderr)
+            sleep_seconds = random.uniform(args.reload_wait_min, args.reload_wait_max) if "timeout" in error_text else min(30, attempt * 3)
+            print(f"Page {page_index} attempt {attempt} failed: {exc}. Retrying in {sleep_seconds:.1f}s...", file=sys.stderr)
+            if on_retry:
+                on_retry()
             time.sleep(sleep_seconds)
     raise RuntimeError("Retry loop exhausted")
 
@@ -261,6 +356,12 @@ def self_check() -> int:
     sql = "select * from t OFFSET 1000*0 ROWS FETCH NEXT 1000 ROWS ONLY"
     assert set_offset_sql(sql, 0, 1000).endswith("OFFSET 1000*0 ROWS FETCH NEXT 1000 ROWS ONLY")
     assert set_offset_sql(sql, 9, 1000).endswith("OFFSET 1000*9 ROWS FETCH NEXT 1000 ROWS ONLY")
+    limit_sql = "select * from t LIMIT 1000*0, 1000"
+    assert set_limit_sql(limit_sql, 0, 1000).endswith("LIMIT 0, 1000")
+    assert set_limit_sql(limit_sql, 9, 1000).endswith("LIMIT 9000, 1000")
+    assert stop_reason(5, 5, None, 0) == "Reached max-pages=5."
+    assert stop_reason(12, None, 2, 10) == "Reached batch-pages=2."
+    assert stop_reason(11, None, 2, 10) is None
     try:
         set_offset_sql(sql + " " + sql, 0, 1000)
     except ValueError:
