@@ -1,8 +1,8 @@
-#!/usr/bin/env bash
+/e#!/usr/bin/env bash
 set -euo pipefail
 
-SQL_FILE="${SQL_FILE:-Rekap_UMKM_by_Keberadaan.sql}"
-OUTPUT_DIR="${OUTPUT_DIR:-output/Rekap_UMKM/16072026}"
+SQL_FILE="${SQL_FILE:-Keluarga_Ditemukan_Baru.sql}"
+OUTPUT_DIR="${OUTPUT_DIR:-output/Keluarga/11082026}"
 CDP_URL="${CDP_URL:-http://127.0.0.1:9222}"
 CHROME_USER_DATA_DIR="${CHROME_USER_DATA_DIR:-$HOME/.chrome-sqllab-cdp}"
 CHROME_LOG="${CHROME_LOG:-/tmp/sqllab-chrome.log}"
@@ -42,6 +42,7 @@ uv run python fetch_sqllab.py \
   --output-dir "$OUTPUT_DIR" \
   --cdp-url "$CDP_URL" \
   --pagination limit \
+  --page-size "${PAGE_SIZE:-9000}" \
   --timeout "${TIMEOUT:-900}" \
   --reload-after "${RELOAD_AFTER:-360}" \
   --reload-wait-min "${RELOAD_WAIT_MIN:-3}" \

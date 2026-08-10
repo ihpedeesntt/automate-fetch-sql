@@ -31,7 +31,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--sql", default="T_USAHA_RAW.sql")
     parser.add_argument("--env", default=".env")
     parser.add_argument("--output-dir", default="output")
-    parser.add_argument("--page-size", type=int, default=1000)
+    parser.add_argument("--page-size", type=int, default=9000)
     parser.add_argument("--pagination", choices=("offset", "limit"), default="offset")
     parser.add_argument("--timeout", type=int, default=300)
     parser.add_argument("--reload-after", type=int, default=120)
@@ -101,10 +101,17 @@ def output_paths(output_dir: str, sql_path: str) -> tuple[Path, Path, Path]:
     return run_dir, pages_dir, checkpoint
 
 
-def load_checkpoint(path: Path, resume: bool) -> dict[str, Any]:
+def load_checkpoint(path: Path, resume: bool, page_size: int, pagination: str) -> dict[str, Any]:
     if resume and path.exists():
-        return json.loads(path.read_text())
-    return {"next_page_index": 0, "total_rows": 0}
+        checkpoint = json.loads(path.read_text())
+        if checkpoint.get("page_size") != page_size or checkpoint.get("pagination") != pagination:
+            raise RuntimeError(
+                f"Checkpoint uses page_size={checkpoint.get('page_size')} "
+                f"and pagination={checkpoint.get('pagination')}; "
+                "use --no-resume to start a new run."
+            )
+        return checkpoint
+    return {"next_page_index": 0, "total_rows": 0, "page_size": page_size, "pagination": pagination}
 
 
 def save_checkpoint(path: Path, checkpoint: dict[str, Any]) -> None:
@@ -264,7 +271,7 @@ def run(args: argparse.Namespace) -> int:
     profile_directory = args.chrome_profile_directory or env.get("SQLLAB_CHROME_PROFILE_DIRECTORY")
     sql = read_sql(args.sql)
     run_dir, pages_dir, checkpoint_path = output_paths(args.output_dir, args.sql)
-    checkpoint = load_checkpoint(checkpoint_path, args.resume)
+    checkpoint = load_checkpoint(checkpoint_path, args.resume, args.page_size, args.pagination)
     start_page = int(checkpoint["next_page_index"])
     print(f"sql={args.sql}")
     print(f"output={run_dir}")
@@ -321,6 +328,8 @@ def run(args: argparse.Namespace) -> int:
                     "last_completed_offset": page_index * args.page_size,
                     "last_page_rows": len(rows),
                     "total_rows": int(checkpoint["total_rows"]) + len(rows),
+                    "page_size": args.page_size,
+                    "pagination": args.pagination,
                 }
                 save_checkpoint(checkpoint_path, checkpoint)
                 print(f"page={page_index} offset={page_index * args.page_size} rows={len(rows)} total={checkpoint['total_rows']}")
@@ -359,6 +368,10 @@ def self_check() -> int:
     limit_sql = "select * from t LIMIT 1000*0, 1000"
     assert set_limit_sql(limit_sql, 0, 1000).endswith("LIMIT 0, 1000")
     assert set_limit_sql(limit_sql, 9, 1000).endswith("LIMIT 9000, 1000")
+    limit_9000 = "select * from t LIMIT 0, 1000"
+    assert set_limit_sql(limit_9000, 0, 9000).endswith("LIMIT 0, 9000")
+    assert set_limit_sql(limit_9000, 1, 9000).endswith("LIMIT 9000, 9000")
+    assert set_limit_sql(limit_9000, 2, 9000).endswith("LIMIT 18000, 9000")
     assert stop_reason(5, 5, None, 0) == "Reached max-pages=5."
     assert stop_reason(12, None, 2, 10) == "Reached batch-pages=2."
     assert stop_reason(11, None, 2, 10) is None
