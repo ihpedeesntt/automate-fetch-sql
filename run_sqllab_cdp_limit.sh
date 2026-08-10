@@ -1,4 +1,4 @@
-/e#!/usr/bin/env bash
+#!/usr/bin/env bash
 set -euo pipefail
 
 SQL_FILE="${SQL_FILE:-Keluarga_Ditemukan_Baru.sql}"

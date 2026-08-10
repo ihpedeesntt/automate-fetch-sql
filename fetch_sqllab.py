@@ -16,6 +16,7 @@ from typing import Any
 BASE_URL = "https://fasih-dashboard.bps.go.id"
 SQLLAB_URL = BASE_URL + "/superset/sqllab/"
 RESULTS_URL_FRAGMENT = "/api/v1/sqllab/results/"
+NO_STORED_RESULT = "no stored result found"
 OFFSET_RE = re.compile(
     r"OFFSET\s+(?:\d+\s*\*\s*\d+|\d+)\s+ROWS\s+FETCH\s+NEXT\s+\d+\s+ROWS\s+ONLY",
     re.IGNORECASE,
@@ -160,6 +161,10 @@ def normalize_cell(value: Any) -> Any:
     return value
 
 
+def needs_result_rerun(response: dict[str, Any]) -> bool:
+    return NO_STORED_RESULT in json.dumps(response, ensure_ascii=False).lower()
+
+
 def set_editor_sql(page: Any, sql: str) -> None:
     ok = page.evaluate(
         """(sql) => {
@@ -200,22 +205,28 @@ def set_editor_sql(page: Any, sql: str) -> None:
     page.keyboard.insert_text(sql)
 
 
-def click_run_and_wait_results(page: Any, timeout_ms: int) -> dict[str, Any]:
-    run_button = page.locator("button.ant-btn.superset-button.cta:has(span:has-text('Run'))").first
-    run_button.wait_for(state="visible", timeout=45_000)
-    run_button.scroll_into_view_if_needed(timeout=10_000)
+def click_run_and_wait_results(page: Any, timeout_ms: int, rerun_delay: float = 5) -> dict[str, Any]:
+    for attempt in range(2):
+        run_button = page.locator("button.ant-btn.superset-button.cta:has(span:has-text('Run'))").first
+        run_button.wait_for(state="visible", timeout=45_000)
+        run_button.scroll_into_view_if_needed(timeout=10_000)
 
-    with page.expect_response(
-        lambda response: response.request.method.upper() == "GET" and RESULTS_URL_FRAGMENT in response.url,
-        timeout=timeout_ms,
-    ) as result_info:
-        run_button.click(timeout=20_000, force=True)
+        with page.expect_response(
+            lambda response: response.request.method.upper() == "GET" and RESULTS_URL_FRAGMENT in response.url,
+            timeout=timeout_ms,
+        ) as result_info:
+            run_button.click(timeout=20_000, force=True)
 
-    response = result_info.value
-    try:
-        return response.json()
-    except Exception as exc:
-        raise RuntimeError(f"Results returned non-JSON HTTP {response.status}") from exc
+        response = result_info.value
+        try:
+            payload = response.json()
+        except Exception as exc:
+            raise RuntimeError(f"Results returned non-JSON HTTP {response.status}") from exc
+        if not needs_result_rerun(payload) or attempt:
+            return payload
+        print("SQL Lab returned 'no stored result found'; rerunning in 5s...", file=sys.stderr)
+        time.sleep(rerun_delay)
+    raise RuntimeError("SQL Lab result rerun failed")
 
 
 def fetch_page(page: Any, sql: str, page_index: int, page_size: int, timeout: int, reload_after: int, pagination: str) -> dict[str, Any]:
@@ -387,6 +398,8 @@ def self_check() -> int:
         assert "Create failed" in str(exc)
     else:
         raise AssertionError("api errors should fail")
+    assert needs_result_rerun({"errors": [{"message": "No stored result found"}]})
+    assert not needs_result_rerun({"data": [{"id": 1}]})
     print("self-check passed")
     return 0
 
