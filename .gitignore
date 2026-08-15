@@ -1,4 +1,4 @@
-/ex# Python-generated files
+# Python-generated files
 __pycache__/
 *.py[oc]
 build/
@@ -17,7 +17,7 @@ wheels/
 # SQL Lab output
 output/
 pages/
+excel/
 
 *.xlsx
-
 

@@ -1,6 +1,22 @@
 # SQL Lab Pager
 
-Automates paged SQL Lab queries by editing SQL Lab, clicking Run, capturing the results response, and exporting each page to CSV.
+Automates authenticated Superset SQL Lab queries through Chrome/CDP, paginates
+results, saves page CSVs, and creates one merged CSV per query.
+
+## Layout
+
+```text
+queries/                  SQL inputs
+fetch_sqllab.py           Single-query fetcher
+run_sqllab_cdp.sh         Single-query launcher
+run_sqllab_cdp_batch.sh   Directory batch launcher
+merge_csv_to_excel.py     Optional Excel conversion
+archive/legacy-scripts/   Older launcher variants
+output/                   Generated pages, checkpoints, and CSVs
+```
+
+Generated output, Excel files, browser profiles, `.env`, and the virtual
+environment are local and ignored by Git.
 
 ## Setup
 
@@ -9,166 +25,106 @@ uv sync
 uv run playwright install chrome
 ```
 
-Optional `.env`:
-
-```env
-SQLLAB_CHROME_PROFILE=.chrome-sqllab-profile
-# Optional: attach to Chrome started with --remote-debugging-port=9222
-SQLLAB_CDP_URL=http://127.0.0.1:9222
-```
-
-## Run
+Start the supported single-query launcher with a query file:
 
 ```bash
-uv run python fetch_sqllab.py --sql T_USAHA_RAW.sql
+./run_sqllab_cdp.sh queries/Keluarga_Ditemukan_Baru.sql
 ```
 
-The first run opens Chrome. Log in to SQL Lab there, then rerun if the first request fails before login completes.
+The launcher starts a dedicated Chrome CDP profile. Log in to SQL Lab once,
+then press Enter in the terminal.
 
-Outputs go to:
-
-```text
-output/T_USAHA_RAW/pages/page-0000.csv
-output/T_USAHA_RAW/checkpoint.json
-```
-
-Useful flags:
+Run every SQL file in the query directory with one login:
 
 ```bash
---max-pages 1
---batch-pages 3
---manual-start
---delay 30
---no-resume
---save-json
---page-size 9000
---no-sandbox
+./run_sqllab_cdp_batch.sh queries
 ```
 
-For flagged/fragile sessions, run small batches and resume later:
+Files run in filename order. A failed query stops the batch so it can be
+resumed without silently skipping data.
 
-```bash
-uv run python fetch_sqllab.py \
-  --sql KBLI_LEVEL_5.sql \
-  --output-dir output/KBLI/29062026 \
-  --timeout 900 \
-  --delay 30 \
-  --batch-pages 3 \
-  --manual-start
-```
+## Pagination
 
-To use your existing Chrome profile without CDP, close all Chrome windows first, then run:
+The fetcher automatically detects one pagination clause in each SQL file.
 
-```bash
-uv run python fetch_sqllab.py \
-  --sql KBLI_LEVEL_5.sql \
-  --output-dir output/KBLI/29062026 \
-  --chrome-profile "$HOME/.config/google-chrome" \
-  --chrome-profile-directory Default \
-  --timeout 900 \
-  --delay 30 \
-  --batch-pages 3 \
-  --manual-start
-```
-
-Chrome may reject CDP on the default profile. Use a dedicated CDP profile and log in there once:
-
-```bash
-google-chrome \
-  --remote-debugging-port=9222 \
-  --user-data-dir="$HOME/.chrome-sqllab-cdp"
-```
-
-Verify Chrome is listening:
-
-```bash
-curl http://127.0.0.1:9222/json/version
-```
-
-Then run:
-
-```bash
-uv run python fetch_sqllab.py \
-  --sql KBLI_LEVEL_5.sql \
-  --output-dir output/KBLI/29062026 \
-  --cdp-url http://127.0.0.1:9222 \
-  --timeout 900 \
-  --delay 30 \
-  --batch-pages 3 \
-  --manual-start
-```
-
-Each OFFSET-based `.sql` file must contain exactly one clause like:
-
-```sql
-OFFSET 9000*0 ROWS FETCH NEXT 9000 ROWS ONLY
-```
-
-For databases that support comma-form LIMIT syntax, use `--pagination limit` and
-one clause like this:
+LIMIT queries use comma syntax:
 
 ```sql
 LIMIT 0, 9000
 ```
 
-The fetcher changes only the first LIMIT value, producing `LIMIT 0, 9000`,
-then `LIMIT 9000, 9000`, then `LIMIT 18000, 9000`. The second value remains the
-page size, so pages are contiguous and do not overlap.
+Pages become `LIMIT 0, 9000`, `LIMIT 9000, 9000`, and so on. OFFSET queries
+can use:
 
-The LIMIT wrapper starts Chrome with CDP and defaults to
-`Keluarga_Ditemukan_Baru.sql`:
-
-```bash
-./run_sqllab_cdp_limit.sh
+```sql
+OFFSET 9000*0 ROWS FETCH NEXT 9000 ROWS ONLY
 ```
 
-Override the SQL file and output directory when needed:
+The fetcher continues when exactly 9,000 rows are returned and stops when a
+page contains fewer rows. Every query should have a stable deterministic
+`ORDER BY` so rows do not move between pages during a run.
+
+For direct Python usage:
 
 ```bash
-SQL_FILE=MY_QUERY.sql \
-OUTPUT_DIR=output/MY_QUERY/16072026 \
-./run_sqllab_cdp_limit.sh
+uv run python fetch_sqllab.py \
+  --sql queries/Keluarga_Ditemukan_Baru.sql \
+  --output-dir output/15082026 \
+  --pagination auto \
+  --page-size 9000 \
+  --cdp-url http://127.0.0.1:9222
 ```
 
-To restart from page 0, remove the run's checkpoint or pass `--no-resume` when
-running `fetch_sqllab.py` directly.
+## Output and Resume
 
-## Merge To Excel
-
-Merge one run's CSV pages into one `.xlsx` with all values written as text:
-
-```bash
-uv run python merge_csv_to_excel.py output/KBLI/06072026/KBLI_LEVEL_5
-uv run python merge_csv_to_excel.py output/T_USAHA_RAW
-```
-
-Optional output path:
-
-```bash
-uv run python merge_csv_to_excel.py output/KBLI/06072026/KBLI_LEVEL_5/pages --output output/KBLI/06072026/KBLI_LEVEL_5.xlsx
-```
-
-## Batch Queries
-
-Run every `.sql` file in a directory with one Chrome login:
-
-```bash
-./run_sqllab_cdp_batch.sh path/to/sql-queries
-```
-
-The batch runner processes files in filename order and writes one final CSV
-per query:
+For query `Keluarga_Ditemukan_Baru.sql` on `15082026`:
 
 ```text
-output/15082026/query_name_15082026.csv
+output/15082026/Keluarga_Ditemukan_Baru_15082026.csv
+output/15082026/Keluarga_Ditemukan_Baru/pages/page-0000.csv
+output/15082026/Keluarga_Ditemukan_Baru/checkpoint.json
 ```
 
-Page CSVs and checkpoints remain under the same date directory so an
-interrupted query can resume. Completed final CSVs are skipped on rerun.
-Use `FORCE=1` to restart completed queries from page 0; stale page files for
-that query are cleared first:
+The batch launcher skips a query when its final CSV already exists. Restart
+completed queries from page 0 with:
 
 ```bash
-OUTPUT_ROOT=output/exports RUN_DATE=15082026 FORCE=1 \
-./run_sqllab_cdp_batch.sh path/to/sql-queries
+FORCE=1 RUN_DATE=15082026 ./run_sqllab_cdp_batch.sh queries
 ```
+
+Useful overrides:
+
+```bash
+OUTPUT_ROOT=output/exports
+RUN_DATE=15082026
+PAGE_SIZE=9000
+TIMEOUT=900
+DELAY=15
+MAX_RETRIES=20
+```
+
+The batch launcher also accepts `CDP_URL`, `CHROME_USER_DATA_DIR`,
+`CHROME_LOG`, and `CDP_WAIT_SECONDS`.
+
+## Excel Conversion
+
+Convert one query's page CSVs to an Excel workbook with all values stored as
+text:
+
+```bash
+uv run python merge_csv_to_excel.py \
+  output/15082026/Keluarga_Ditemukan_Baru
+```
+
+Use `--output` to choose the workbook path.
+
+## Windows
+
+The Python fetcher works on Windows. The `.sh` launchers require Bash, so use
+WSL or Git Bash. Start Chrome with CDP manually and run the Python command if
+using PowerShell.
+
+## Legacy Scripts
+
+`archive/legacy-scripts/` contains the older LIMIT-only and existing-profile
+launchers. Use the generic CDP launcher or the batch launcher instead.

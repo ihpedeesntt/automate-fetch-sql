@@ -72,7 +72,7 @@ for sql_path in "${SQL_FILES[@]}"; do
     --sql "$sql_path" \
     --output-dir "$OUTPUT_DIR" \
     --cdp-url "$CDP_URL" \
-    --pagination limit \
+    --pagination auto \
     --page-size "$PAGE_SIZE" \
     --merged-csv "$merged_csv" \
     --timeout "${TIMEOUT:-900}" \

@@ -31,11 +31,11 @@ LIMIT_RE = re.compile(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--sql", default="T_USAHA_RAW.sql")
+    parser.add_argument("--sql")
     parser.add_argument("--env", default=".env")
     parser.add_argument("--output-dir", default="output")
     parser.add_argument("--page-size", type=int, default=9000)
-    parser.add_argument("--pagination", choices=("offset", "limit"), default="offset")
+    parser.add_argument("--pagination", choices=("auto", "offset", "limit"), default="auto")
     parser.add_argument("--timeout", type=int, default=300)
     parser.add_argument("--reload-after", type=int, default=120)
     parser.add_argument("--reload-wait-min", type=float, default=3)
@@ -99,6 +99,16 @@ def set_page_sql(sql: str, page_index: int, page_size: int, pagination: str) -> 
     if pagination == "limit":
         return set_limit_sql(sql, page_index, page_size)
     return set_offset_sql(sql, page_index, page_size)
+
+
+def resolve_pagination(sql: str, pagination: str) -> str:
+    if pagination != "auto":
+        return pagination
+    has_limit = bool(LIMIT_RE.search(sql))
+    has_offset = bool(OFFSET_RE.search(sql))
+    if has_limit == has_offset:
+        raise ValueError("Expected exactly one LIMIT or OFFSET/FETCH clause")
+    return "limit" if has_limit else "offset"
 
 
 def output_paths(output_dir: str, sql_path: str) -> tuple[Path, Path, Path]:
@@ -358,19 +368,23 @@ def run(args: argparse.Namespace) -> int:
     except ImportError as exc:
         raise RuntimeError("Playwright is not installed. Run `uv sync` first.") from exc
 
+    if not args.sql:
+        raise RuntimeError("--sql is required")
+
     env = load_env(args.env)
     cdp_url = args.cdp_url or env.get("SQLLAB_CDP_URL")
     profile = args.chrome_profile or env.get("SQLLAB_CHROME_PROFILE") or ".chrome-sqllab-profile"
     profile_directory = args.chrome_profile_directory or env.get("SQLLAB_CHROME_PROFILE_DIRECTORY")
     sql = read_sql(args.sql)
+    pagination = resolve_pagination(sql, args.pagination)
     run_dir, pages_dir, checkpoint_path = output_paths(args.output_dir, args.sql)
-    checkpoint = load_checkpoint(checkpoint_path, args.resume, args.page_size, args.pagination)
+    checkpoint = load_checkpoint(checkpoint_path, args.resume, args.page_size, pagination)
     start_page = int(checkpoint["next_page_index"])
     log(f"sql={args.sql}")
     log(f"output={run_dir}")
     log(f"pages={pages_dir}")
     log(f"checkpoint={checkpoint_path}")
-    log(f"start_page={start_page} page_size={args.page_size} pagination={args.pagination}")
+    log(f"start_page={start_page} page_size={args.page_size} pagination={pagination}")
     if cdp_url:
         log(f"cdp_url={cdp_url}")
 
@@ -406,7 +420,7 @@ def run(args: argparse.Namespace) -> int:
 
                 response = retry_page(
                     args,
-                    lambda: fetch_page(page, sql, page_index, args.page_size, args.timeout, args.reload_after, args.pagination),
+                    lambda: fetch_page(page, sql, page_index, args.page_size, args.timeout, args.reload_after, pagination),
                     page_index,
                     lambda: open_sqllab(page, PlaywrightTimeoutError),
                 )
@@ -425,7 +439,7 @@ def run(args: argparse.Namespace) -> int:
                     "last_page_rows": len(rows),
                     "total_rows": int(checkpoint["total_rows"]) + len(rows),
                     "page_size": args.page_size,
-                    "pagination": args.pagination,
+                    "pagination": pagination,
                 }
                 save_checkpoint(checkpoint_path, checkpoint)
                 log(
@@ -476,6 +490,14 @@ def self_check() -> int:
     assert set_limit_sql(limit_9000, 0, 9000).endswith("LIMIT 0, 9000")
     assert set_limit_sql(limit_9000, 1, 9000).endswith("LIMIT 9000, 9000")
     assert set_limit_sql(limit_9000, 2, 9000).endswith("LIMIT 18000, 9000")
+    assert resolve_pagination(limit_sql, "auto") == "limit"
+    assert resolve_pagination(sql, "auto") == "offset"
+    try:
+        resolve_pagination("select 1", "auto")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("missing pagination should fail")
     assert stop_reason(5, 5, None, 0) == "Reached max-pages=5."
     assert stop_reason(12, None, 2, 10) == "Reached batch-pages=2."
     assert stop_reason(11, None, 2, 10) is None
