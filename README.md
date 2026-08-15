@@ -147,3 +147,28 @@ Optional output path:
 ```bash
 uv run python merge_csv_to_excel.py output/KBLI/06072026/KBLI_LEVEL_5/pages --output output/KBLI/06072026/KBLI_LEVEL_5.xlsx
 ```
+
+## Batch Queries
+
+Run every `.sql` file in a directory with one Chrome login:
+
+```bash
+./run_sqllab_cdp_batch.sh path/to/sql-queries
+```
+
+The batch runner processes files in filename order and writes one final CSV
+per query:
+
+```text
+output/15082026/query_name_15082026.csv
+```
+
+Page CSVs and checkpoints remain under the same date directory so an
+interrupted query can resume. Completed final CSVs are skipped on rerun.
+Use `FORCE=1` to restart completed queries from page 0; stale page files for
+that query are cleared first:
+
+```bash
+OUTPUT_ROOT=output/exports RUN_DATE=15082026 FORCE=1 \
+./run_sqllab_cdp_batch.sh path/to/sql-queries
+```

@@ -6,6 +6,7 @@ import os
 import random
 import re
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -44,6 +45,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-pages", type=int)
     parser.add_argument("--batch-pages", type=int)
     parser.add_argument("--save-json", action="store_true")
+    parser.add_argument("--merged-csv")
     parser.add_argument("--manual-start", action="store_true")
     parser.add_argument("--resume", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--show-browser", action=argparse.BooleanOptionalAction, default=True)
@@ -156,6 +158,37 @@ def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
         writer.writeheader()
         for row in rows:
             writer.writerow({key: normalize_cell(row.get(key)) for key in columns})
+
+
+def merge_page_csvs(pages_dir: Path, output_path: Path) -> None:
+    files = sorted(pages_dir.glob("page-*.csv"))
+    if not files:
+        raise RuntimeError(f"No page CSV files found in {pages_dir}")
+
+    columns: list[str] = []
+    seen: set[str] = set()
+    for path in files:
+        with path.open(newline="", encoding="utf-8-sig") as handle:
+            for column in next(csv.reader(handle), []):
+                if column not in seen:
+                    seen.add(column)
+                    columns.append(column)
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path = output_path.with_suffix(output_path.suffix + ".tmp")
+    try:
+        with temporary_path.open("w", newline="", encoding="utf-8-sig") as handle:
+            writer = csv.DictWriter(handle, fieldnames=columns, extrasaction="ignore")
+            if columns:
+                writer.writeheader()
+            for path in files:
+                with path.open(newline="", encoding="utf-8-sig") as page_handle:
+                    for row in csv.DictReader(page_handle):
+                        writer.writerow({column: row.get(column, "") or "" for column in columns})
+        temporary_path.replace(output_path)
+    except Exception:
+        temporary_path.unlink(missing_ok=True)
+        raise
 
 
 def normalize_cell(value: Any) -> Any:
@@ -402,6 +435,10 @@ def run(args: argparse.Namespace) -> int:
                 time.sleep(args.delay)
 
                 if len(rows) < args.page_size:
+                    if args.merged_csv:
+                        merged_csv = Path(args.merged_csv)
+                        merge_page_csvs(pages_dir, merged_csv)
+                        log(f"Merged CSV saved path={merged_csv}")
                     log("Last page reached.")
                     return 0
                 log(f"Page={page_index} complete; advancing to page={page_index + 1}")
@@ -456,6 +493,19 @@ def self_check() -> int:
         raise AssertionError("api errors should fail")
     assert needs_result_rerun({"errors": [{"message": "No stored result found"}]})
     assert not needs_result_rerun({"data": [{"id": 1}]})
+    with tempfile.TemporaryDirectory() as tmp:
+        pages = Path(tmp) / "pages"
+        pages.mkdir()
+        write_csv(pages / "page-0000.csv", [{"id": "001", "name": "a"}])
+        write_csv(pages / "page-0001.csv", [{"id": "002", "extra": "b"}])
+        merged = Path(tmp) / "merged.csv"
+        merge_page_csvs(pages, merged)
+        with merged.open(newline="", encoding="utf-8-sig") as handle:
+            merged_rows = list(csv.DictReader(handle))
+        assert merged_rows == [
+            {"id": "001", "name": "a", "extra": ""},
+            {"id": "002", "name": "", "extra": "b"},
+        ]
     print("self-check passed")
     return 0
 
