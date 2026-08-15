@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SQL_FILE="${SQL_FILE:-Keluarga_Ditemukan_Baru.sql}"
-OUTPUT_DIR="${OUTPUT_DIR:-output/Keluarga/11082026}"
+OUTPUT_DIR="${OUTPUT_DIR:-output/Keluarga/13082026}"
 CDP_URL="${CDP_URL:-http://127.0.0.1:9222}"
 CHROME_USER_DATA_DIR="${CHROME_USER_DATA_DIR:-$HOME/.chrome-sqllab-cdp}"
 CHROME_LOG="${CHROME_LOG:-/tmp/sqllab-chrome.log}"

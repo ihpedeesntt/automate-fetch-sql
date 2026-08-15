@@ -41,6 +41,7 @@ uv run python fetch_sqllab.py \
   --sql "$SQL_FILE" \
   --output-dir "$OUTPUT_DIR" \
   --cdp-url "$CDP_URL" \
+  --page-size "${PAGE_SIZE:-9000}" \
   --timeout "${TIMEOUT:-900}" \
   --reload-after "${RELOAD_AFTER:-360}" \
   --reload-wait-min "${RELOAD_WAIT_MIN:-3}" \

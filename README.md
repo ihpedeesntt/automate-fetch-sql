@@ -41,7 +41,7 @@ Useful flags:
 --delay 30
 --no-resume
 --save-json
---page-size 1000
+--page-size 9000
 --no-sandbox
 ```
 
@@ -101,19 +101,19 @@ uv run python fetch_sqllab.py \
 Each OFFSET-based `.sql` file must contain exactly one clause like:
 
 ```sql
-OFFSET 1000*0 ROWS FETCH NEXT 1000 ROWS ONLY
+OFFSET 9000*0 ROWS FETCH NEXT 9000 ROWS ONLY
 ```
 
 For databases that support comma-form LIMIT syntax, use `--pagination limit` and
 one clause like this:
 
 ```sql
-LIMIT 0, 1000
+LIMIT 0, 9000
 ```
 
-The fetcher changes only the first LIMIT value, producing `LIMIT 0, 1000`,
-then `LIMIT 1000, 1000`, then `LIMIT 2000, 1000`. The second value remains the
-page size.
+The fetcher changes only the first LIMIT value, producing `LIMIT 0, 9000`,
+then `LIMIT 9000, 9000`, then `LIMIT 18000, 9000`. The second value remains the
+page size, so pages are contiguous and do not overlap.
 
 The LIMIT wrapper starts Chrome with CDP and defaults to
 `Keluarga_Ditemukan_Baru.sql`:

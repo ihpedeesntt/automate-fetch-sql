@@ -16,6 +16,7 @@ from typing import Any
 BASE_URL = "https://fasih-dashboard.bps.go.id"
 SQLLAB_URL = BASE_URL + "/superset/sqllab/"
 RESULTS_URL_FRAGMENT = "/api/v1/sqllab/results/"
+SQLLAB_API_FRAGMENT = "/api/v1/sqllab/"
 NO_STORED_RESULT = "no stored result found"
 OFFSET_RE = re.compile(
     r"OFFSET\s+(?:\d+\s*\*\s*\d+|\d+)\s+ROWS\s+FETCH\s+NEXT\s+\d+\s+ROWS\s+ONLY",
@@ -70,6 +71,10 @@ def load_env(path: str) -> dict[str, str]:
 
 def read_sql(path: str) -> str:
     return Path(path).read_text().strip()
+
+
+def log(message: str) -> None:
+    print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {message}", flush=True)
 
 
 def set_offset_sql(sql: str, page_index: int, page_size: int) -> str:
@@ -165,6 +170,18 @@ def needs_result_rerun(response: dict[str, Any]) -> bool:
     return NO_STORED_RESULT in json.dumps(response, ensure_ascii=False).lower()
 
 
+def response_row_count(response: dict[str, Any]) -> int | None:
+    rows = response.get("data")
+    return len(rows) if isinstance(rows, list) else None
+
+
+def is_sql_lab_api_response(response: Any) -> bool:
+    return (
+        response.request.method.upper() in {"GET", "POST"}
+        and SQLLAB_API_FRAGMENT in response.url
+    )
+
+
 def set_editor_sql(page: Any, sql: str) -> None:
     ok = page.evaluate(
         """(sql) => {
@@ -207,22 +224,40 @@ def set_editor_sql(page: Any, sql: str) -> None:
 
 def click_run_and_wait_results(page: Any, timeout_ms: int, rerun_delay: float = 5) -> dict[str, Any]:
     for attempt in range(2):
+        log(f"Run click attempt={attempt + 1}/2")
         run_button = page.locator("button.ant-btn.superset-button.cta:has(span:has-text('Run'))").first
         run_button.wait_for(state="visible", timeout=45_000)
         run_button.scroll_into_view_if_needed(timeout=10_000)
 
-        with page.expect_response(
-            lambda response: response.request.method.upper() == "GET" and RESULTS_URL_FRAGMENT in response.url,
-            timeout=timeout_ms,
-        ) as result_info:
-            run_button.click(timeout=20_000, force=True)
+        deadline = time.monotonic() + timeout_ms / 1000
+        request_started = False
+        while True:
+            remaining_ms = max(1_000, int((deadline - time.monotonic()) * 1000))
+            with page.expect_response(is_sql_lab_api_response, timeout=remaining_ms) as response_info:
+                if not request_started:
+                    run_button.click(timeout=20_000, force=True)
+                    request_started = True
+            response = response_info.value
+            is_result = RESULTS_URL_FRAGMENT in response.url
+            try:
+                payload = response.json()
+            except Exception:
+                if is_result:
+                    raise RuntimeError(f"Results returned non-JSON HTTP {response.status}")
+                log(f"Ignored non-JSON SQL Lab response status={response.status} url={response.url}")
+                continue
 
-        response = result_info.value
-        try:
-            payload = response.json()
-        except Exception as exc:
-            raise RuntimeError(f"Results returned non-JSON HTTP {response.status}") from exc
-        if not needs_result_rerun(payload) or attempt:
+            warning = needs_result_rerun(payload)
+            rows = response_row_count(payload)
+            log(f"SQL Lab response status={response.status} rows={rows} warning={warning} url={response.url}")
+            if warning:
+                break
+            if rows is not None:
+                return payload
+            if time.monotonic() >= deadline:
+                raise TimeoutError(f"SQL Lab returned no row payload within {timeout_ms}ms")
+
+        if attempt:
             return payload
         print("SQL Lab returned 'no stored result found'; rerunning in 5s...", file=sys.stderr)
         time.sleep(rerun_delay)
@@ -230,13 +265,27 @@ def click_run_and_wait_results(page: Any, timeout_ms: int, rerun_delay: float = 
 
 
 def fetch_page(page: Any, sql: str, page_index: int, page_size: int, timeout: int, reload_after: int, pagination: str) -> dict[str, Any]:
-    set_editor_sql(page, set_page_sql(sql, page_index, page_size, pagination))
+    page_sql = set_page_sql(sql, page_index, page_size, pagination)
+    clause = LIMIT_RE.search(page_sql) if pagination == "limit" else OFFSET_RE.search(page_sql)
+    log(f"Preparing page={page_index} offset={page_index * page_size} clause={clause.group(0) if clause else 'MISSING'}")
+    set_editor_sql(page, page_sql)
+    log(f"Editor updated page={page_index}; waiting before Run")
     time.sleep(0.5)
     return click_run_and_wait_results(page, min(timeout, reload_after) * 1000)
 
 
 def open_sqllab(page: Any, timeout_error: Any) -> None:
-    page.goto(SQLLAB_URL, wait_until="domcontentloaded", timeout=120_000)
+    try:
+        page.wait_for_load_state("domcontentloaded", timeout=10_000)
+    except timeout_error:
+        pass
+    try:
+        page.goto(SQLLAB_URL, wait_until="domcontentloaded", timeout=120_000)
+    except Exception as exc:
+        if "interrupted by another navigation" not in str(exc).lower():
+            raise
+        log("SQL Lab navigation is still active; waiting for it to settle")
+        page.wait_for_load_state("domcontentloaded", timeout=120_000)
     try:
         page.wait_for_load_state("networkidle", timeout=120_000)
     except timeout_error:
@@ -284,13 +333,13 @@ def run(args: argparse.Namespace) -> int:
     run_dir, pages_dir, checkpoint_path = output_paths(args.output_dir, args.sql)
     checkpoint = load_checkpoint(checkpoint_path, args.resume, args.page_size, args.pagination)
     start_page = int(checkpoint["next_page_index"])
-    print(f"sql={args.sql}")
-    print(f"output={run_dir}")
-    print(f"pages={pages_dir}")
-    print(f"checkpoint={checkpoint_path}")
-    print(f"start_page={start_page}")
+    log(f"sql={args.sql}")
+    log(f"output={run_dir}")
+    log(f"pages={pages_dir}")
+    log(f"checkpoint={checkpoint_path}")
+    log(f"start_page={start_page} page_size={args.page_size} pagination={args.pagination}")
     if cdp_url:
-        print(f"cdp_url={cdp_url}")
+        log(f"cdp_url={cdp_url}")
 
     with sync_playwright() as playwright:
         browser = None
@@ -316,9 +365,10 @@ def run(args: argparse.Namespace) -> int:
 
             while True:
                 page_index = int(checkpoint["next_page_index"])
+                log(f"Starting page={page_index} offset={page_index * args.page_size}")
                 reason = stop_reason(page_index, args.max_pages, args.batch_pages, start_page)
                 if reason:
-                    print(reason)
+                    log(reason)
                     return 0
 
                 response = retry_page(
@@ -328,8 +378,10 @@ def run(args: argparse.Namespace) -> int:
                     lambda: open_sqllab(page, PlaywrightTimeoutError),
                 )
                 rows = rows_from_response(response)
+                log(f"Page={page_index} received rows={len(rows)}")
                 page_base = pages_dir / f"page-{page_index:04d}"
                 write_csv(page_base.with_suffix(".csv"), rows)
+                log(f"Page={page_index} CSV saved path={page_base.with_suffix('.csv')}")
                 if args.save_json:
                     page_base.with_suffix(".json").write_text(json.dumps(response, ensure_ascii=False, indent=2))
 
@@ -343,12 +395,16 @@ def run(args: argparse.Namespace) -> int:
                     "pagination": args.pagination,
                 }
                 save_checkpoint(checkpoint_path, checkpoint)
-                print(f"page={page_index} offset={page_index * args.page_size} rows={len(rows)} total={checkpoint['total_rows']}")
+                log(
+                    f"Checkpoint saved page={page_index} next_page={checkpoint['next_page_index']} "
+                    f"offset={page_index * args.page_size} rows={len(rows)} total={checkpoint['total_rows']}"
+                )
                 time.sleep(args.delay)
 
                 if len(rows) < args.page_size:
-                    print("Last page reached.")
+                    log("Last page reached.")
                     return 0
+                log(f"Page={page_index} complete; advancing to page={page_index + 1}")
         finally:
             if not cdp_url:
                 context.close()
@@ -362,10 +418,10 @@ def retry_page(args: argparse.Namespace, task: Any, page_index: int, on_retry: A
             error_text = str(exc).lower()
             non_retry = "create failed" in error_text or "syntax" in error_text
             if non_retry or attempt >= args.max_retries:
-                print(f"Page {page_index} failed: {exc}", file=sys.stderr)
+                print(f"Page {page_index} failed: {exc}", file=sys.stderr, flush=True)
                 raise
             sleep_seconds = random.uniform(args.reload_wait_min, args.reload_wait_max) if "timeout" in error_text else min(30, attempt * 3)
-            print(f"Page {page_index} attempt {attempt} failed: {exc}. Retrying in {sleep_seconds:.1f}s...", file=sys.stderr)
+            print(f"Page {page_index} attempt {attempt} failed: {exc}. Retrying in {sleep_seconds:.1f}s...", file=sys.stderr, flush=True)
             if on_retry:
                 on_retry()
             time.sleep(sleep_seconds)
