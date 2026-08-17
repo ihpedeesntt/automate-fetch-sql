@@ -8,7 +8,7 @@ SELECT
              THEN 'E42' END,
         CASE WHEN (s.gaji / s.total_tk_bayar) > 384000000
              THEN 'E43' END,
-        CASE WHEN s.internet_pesanan_value = 1 AND  ( s.pendapatan_online = 0 OR s.pendapatan_online_bln = 0 )
+        CASE WHEN s.internet_pesanan_value AND  ( s.pendapatan_online = 0 OR s.pendapatan_online_bln = 0 )
              THEN 'E44' END,
         CASE WHEN s.jumlah_kc > 99
              THEN 'E45' END
@@ -33,7 +33,7 @@ WHERE (b.is_active = 1 AND b.assignment_status_id > 1) AND
 OR
 ( (s.gaji / s.total_tk_bayar) > 384000000 )
 OR
-( s.internet_pesanan_value = 1 AND  ( s.pendapatan_online = 0 OR s.pendapatan_online_bln = 0 ) )
+( s.internet_pesanan_value AND  ( s.pendapatan_online = 0 OR s.pendapatan_online_bln = 0 ) )
 OR
 ( s.jumlah_kc > 99 )
 

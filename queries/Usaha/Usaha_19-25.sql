@@ -17,9 +17,9 @@ SELECT
              THEN 'E21' END,
         CASE WHEN jenis_kawasan_value IN (1, 3, 7)
              THEN 'E22' END,
-        CASE WHEN jenis_kawasan_value = 4 AND a.level_2_code NOT IN ('04','05','07','13')
+        CASE WHEN jenis_kawasan_value = 4 AND a.level_2_code NOT IN ('02','06','07','08','09','10','11','12','13','14','15','17','20','71')
              THEN 'E23' END,
-        CASE WHEN jenis_kawasan_value = 5 AND a.level_2_code = '11'
+        CASE WHEN jenis_kawasan_value = 5 AND a.level_2_code NOT IN ('02','03','05','06','07','08','09','10','11','12','13','14','15','17','18','19','20','71')
              THEN 'E24' END,
         CASE WHEN jenis_kawasan_value IN (1,2,3,4,5,6,7,8,9) AND jenis_usaha_value IN (1,6)
              THEN 'E25' END

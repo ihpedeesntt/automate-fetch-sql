@@ -8,6 +8,7 @@ queries/                  SQL inputs
 fetch_sqllab.py           Single-query fetcher
 run_sqllab_cdp.sh         Single-query launcher
 run_sqllab_cdp_batch.sh   Directory batch launcher
+run_sqllab_cdp_batch.ps1  Windows PowerShell batch launcher
 merge_csv_to_excel.py     Optional Excel conversion
 archive/legacy-scripts/   Older launcher variants
 output/                   Generated pages, checkpoints, and CSVs
@@ -27,7 +28,26 @@ uv run playwright install chrome
 ```bash
 ./run_sqllab_cdp.sh queries/Keluarga_Ditemukan_Baru.sql
 ```
-Note : Jika menggunakan windows, bisa menggunakan Git Bash
+On Windows, use the native PowerShell launcher:
+
+```powershell
+.\run_sqllab_cdp_batch.ps1
+```
+
+It defaults to `queries\Usaha`. To choose another directory:
+
+```powershell
+.\run_sqllab_cdp_batch.ps1 .\queries\Sosek
+```
+
+If PowerShell blocks local scripts, run it once with:
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+```
+
+The Bash launchers still work through Git Bash or WSL. The Python fetcher is
+cross-platform.
 
 
 ```bash
@@ -71,7 +91,6 @@ MAX_RETRIES=20
 ```
 
 NOTE : Ketika membuka SQLLAB pastikan limit sudah diset menjadi 10000 dan sebaiknya gunakan tab kosong
-
 
 
 

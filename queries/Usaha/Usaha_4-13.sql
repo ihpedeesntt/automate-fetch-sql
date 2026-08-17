@@ -15,19 +15,19 @@ SELECT
         CASE WHEN c.kbli IN ('94','91','87','88','86','85','80','81','82','78','75','73','72','62','63','60','58','39','37','29','28','27','21','09','26')
              THEN 'E6' END,
         CASE WHEN c.kbli LIKE '51%' AND a.level_2_code NOT IN ('04','05','07','13','72')
-             THEN 'E7' END,
-        CASE WHEN c.kbli LIKE '07%' AND a.level_2_code IN ('01','02','07','09','11','12','13','15','71','72')
-             THEN 'E8' END,
-        CASE WHEN c.kbli LIKE '12%' AND a.level_2_code NOT IN ('03','05','06')
-             THEN 'E9' END,
-        CASE WHEN c.kbli IN ('15','17','19','05','06')
-             THEN 'E10' END,
-        CASE WHEN c.kbli LIKE '24%' AND a.level_2_code NOT IN ('03','04')
-             THEN 'E11' END,
-        CASE WHEN c.kbli LIKE '70%' AND a.level_2_code NOT IN ('71')
-             THEN 'E12' END,
-        CASE WHEN c.kbli LIKE '65%' AND a.level_2_code IN ('02','03','04','05','07','08','09','10','11','71','72')
-             THEN 'E13' END
+             THEN 'E7' END
+        --CASE WHEN c.kbli LIKE '07%' AND a.level_2_code IN ('01','02','07','09','11','12','13','15','71','72')
+          --   THEN 'E8' END,
+        --CASE WHEN c.kbli LIKE '12%' AND a.level_2_code NOT IN ('03','05','06')
+          --   THEN 'E9' END,
+        --CASE WHEN c.kbli IN ('15','17','19','05','06')
+          --   THEN 'E10' END,
+        --CASE WHEN c.kbli LIKE '24%' AND a.level_2_code NOT IN ('03','04')
+          --   THEN 'E11' END,
+        --CASE WHEN c.kbli LIKE '70%' AND a.level_2_code NOT IN ('71')
+          --   THEN 'E12' END,
+        --CASE WHEN c.kbli LIKE '65%' AND a.level_2_code IN ('02','03','04','05','07','08','09','10','11','71','72')
+          --   THEN 'E13' END
     ) AS KODE_ANOMALI,
     b.catatan,
     CONCAT(
@@ -50,12 +50,12 @@ WHERE a.keberadaan_usaha_value IN (1,2) AND d.is_active = 1
        OR (c.kbli IN ('92','97','98','99','84'))
        OR (c.kbli IN ('94','91','87','88','86','85','80','81','82','78','75','73','72','62','63','60','58','39','37','29','28','27','21','09','26'))
        OR (c.kbli LIKE '51%' AND a.level_2_code NOT IN ('04','05','07','13','72'))
-       OR (c.kbli LIKE '07%' AND a.level_2_code IN ('01','02','07','09','11','12','13','15','71','72'))
-       OR (c.kbli LIKE '12%' AND a.level_2_code NOT IN ('03','05','06'))
-       OR (c.kbli IN ('15','17','19','05','06'))
-       OR (c.kbli LIKE '24%' AND a.level_2_code NOT IN ('03','04'))
-       OR (c.kbli LIKE '70%' AND a.level_2_code NOT IN ('71'))
-       OR (c.kbli LIKE '65%' AND a.level_2_code IN ('02','03','04','05','07','08','09','10','11','71','72'))
+    --   OR (c.kbli LIKE '07%' AND a.level_2_code IN ('01','02','07','09','11','12','13','15','71','72'))
+    --   OR (c.kbli LIKE '12%' AND a.level_2_code NOT IN ('03','05','06'))
+    --   OR (c.kbli IN ('15','17','19','05','06'))
+    --   OR (c.kbli LIKE '24%' AND a.level_2_code NOT IN ('03','04'))
+    --   OR (c.kbli LIKE '70%' AND a.level_2_code NOT IN ('71'))
+     --  OR (c.kbli LIKE '65%' AND a.level_2_code IN ('02','03','04','05','07','08','09','10','11','71','72'))
       )
 ORDER BY
     a.level_6_full_code,

@@ -6,10 +6,16 @@ SELECT
    CONCAT_WS(', ',
         CASE WHEN s.lap_keuangan_value = '2' AND badan_usaha_value = '1a' 
              THEN 'E32' END,
-        CASE WHEN s.klasifikasi_value = '5'
+        CASE WHEN s.klasifikasi_value = '5'AND b.level_2_code NOT IN ('01','02','15','17')
              THEN 'E33' END,
-        CASE WHEN s.klasifikasi_value = '4' AND b.level_2_code NOT IN ('71')
-             THEN 'E34' END
+        CASE WHEN s.klasifikasi_value = '4' AND b.level_2_code NOT IN ('02','10','14','15','17','71')
+             THEN 'E34' END,
+        CASE WHEN s.klasifikasi_value = '3' AND b.level_2_code NOT IN ('01','02','07','15','71')
+             THEN 'E54' END,
+        CASE WHEN s.klasifikasi_value = '2' AND b.level_2_code NOT IN ('01','02','06','15','17','71')
+             THEN 'E55' END,
+        CASE WHEN s.klasifikasi_value = '1' AND b.level_2_code NOT IN ('01','02','11','14')
+             THEN 'E56' END
     ) AS "KODE_ANOMALI",
     
     s.keg_utama, u.kbli, s.lap_keuangan_value, s.klasifikasi_value,
@@ -29,10 +35,15 @@ LEFT JOIN tgr_fd68e454.USAHA_REF u
 WHERE (b.is_active = 1 AND b.assignment_status_id > 1) AND
 ( s.lap_keuangan_value = '2' AND badan_usaha_value = '1a' )
 OR
-( s.klasifikasi_value = '5' )
+( s.klasifikasi_value = '5'AND b.level_2_code NOT IN ('01','02','15','17') )
 OR
-( s.klasifikasi_value = '4' AND b.level_2_code NOT IN ('71') )
-
+( s.klasifikasi_value = '4' AND b.level_2_code NOT IN ('02','10','14','15','17','71') )
+OR
+( s.klasifikasi_value = '3' AND b.level_2_code NOT IN ('01','02','07','15','71') )
+OR
+( s.klasifikasi_value = '2' AND b.level_2_code NOT IN ('01','02','06','15','17','71') )
+OR
+( s.klasifikasi_value = '1' AND b.level_2_code NOT IN ('01','02','11','14') )
 ORDER BY
     b.level_6_full_code,
     b.assignment_id
