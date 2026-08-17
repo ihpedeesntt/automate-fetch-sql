@@ -27,6 +27,10 @@ LIMIT_RE = re.compile(
     r"LIMIT\s+(?:\d+\s*\*\s*\d+|\d+)\s*,\s*\d+",
     re.IGNORECASE,
 )
+LIMIT_OFFSET_RE = re.compile(
+    r"LIMIT\s+\d+\s+OFFSET\s+(?:\d+\s*\*\s*\d+|\d+)",
+    re.IGNORECASE,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -88,11 +92,13 @@ def set_offset_sql(sql: str, page_index: int, page_size: int) -> str:
 
 
 def set_limit_sql(sql: str, page_index: int, page_size: int) -> str:
-    matches = list(LIMIT_RE.finditer(sql))
-    if len(matches) != 1:
-        raise ValueError(f"Expected exactly one LIMIT offset,count clause, found {len(matches)}")
-    clause = f"LIMIT {page_index * page_size}, {page_size}"
-    return LIMIT_RE.sub(clause, sql, count=1)
+    comma_matches = list(LIMIT_RE.finditer(sql))
+    offset_matches = list(LIMIT_OFFSET_RE.finditer(sql))
+    if len(comma_matches) + len(offset_matches) != 1:
+        raise ValueError("Expected exactly one LIMIT clause")
+    if comma_matches:
+        return LIMIT_RE.sub(f"LIMIT {page_index * page_size}, {page_size}", sql, count=1)
+    return LIMIT_OFFSET_RE.sub(f"LIMIT {page_size} OFFSET {page_index * page_size}", sql, count=1)
 
 
 def set_page_sql(sql: str, page_index: int, page_size: int, pagination: str) -> str:
@@ -104,7 +110,7 @@ def set_page_sql(sql: str, page_index: int, page_size: int, pagination: str) -> 
 def resolve_pagination(sql: str, pagination: str) -> str:
     if pagination != "auto":
         return pagination
-    has_limit = bool(LIMIT_RE.search(sql))
+    has_limit = bool(LIMIT_RE.search(sql) or LIMIT_OFFSET_RE.search(sql))
     has_offset = bool(OFFSET_RE.search(sql))
     if has_limit == has_offset:
         raise ValueError("Expected exactly one LIMIT or OFFSET/FETCH clause")
@@ -309,7 +315,7 @@ def click_run_and_wait_results(page: Any, timeout_ms: int, rerun_delay: float = 
 
 def fetch_page(page: Any, sql: str, page_index: int, page_size: int, timeout: int, reload_after: int, pagination: str) -> dict[str, Any]:
     page_sql = set_page_sql(sql, page_index, page_size, pagination)
-    clause = LIMIT_RE.search(page_sql) if pagination == "limit" else OFFSET_RE.search(page_sql)
+    clause = (LIMIT_RE.search(page_sql) or LIMIT_OFFSET_RE.search(page_sql)) if pagination == "limit" else OFFSET_RE.search(page_sql)
     log(f"Preparing page={page_index} offset={page_index * page_size} clause={clause.group(0) if clause else 'MISSING'}")
     set_editor_sql(page, page_sql)
     log(f"Editor updated page={page_index}; waiting before Run")
@@ -486,11 +492,16 @@ def self_check() -> int:
     limit_sql = "select * from t LIMIT 1000*0, 1000"
     assert set_limit_sql(limit_sql, 0, 1000).endswith("LIMIT 0, 1000")
     assert set_limit_sql(limit_sql, 9, 1000).endswith("LIMIT 9000, 1000")
+    limit_offset_sql = "select * from t LIMIT 9000 OFFSET 0"
+    assert set_limit_sql(limit_offset_sql, 0, 9000).endswith("LIMIT 9000 OFFSET 0")
+    assert set_limit_sql(limit_offset_sql, 1, 9000).endswith("LIMIT 9000 OFFSET 9000")
+    assert set_limit_sql(limit_offset_sql, 2, 9000).endswith("LIMIT 9000 OFFSET 18000")
     limit_9000 = "select * from t LIMIT 0, 1000"
     assert set_limit_sql(limit_9000, 0, 9000).endswith("LIMIT 0, 9000")
     assert set_limit_sql(limit_9000, 1, 9000).endswith("LIMIT 9000, 9000")
     assert set_limit_sql(limit_9000, 2, 9000).endswith("LIMIT 18000, 9000")
     assert resolve_pagination(limit_sql, "auto") == "limit"
+    assert resolve_pagination(limit_offset_sql, "auto") == "limit"
     assert resolve_pagination(sql, "auto") == "offset"
     try:
         resolve_pagination("select 1", "auto")

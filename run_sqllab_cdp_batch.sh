@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -ne 1 || ! -d "$1" ]]; then
-  echo "Usage: $0 SQL_DIRECTORY" >&2
+if [[ $# -gt 1 ]]; then
+  echo "Usage: $0 [SQL_DIRECTORY]" >&2
   exit 2
 fi
 
-SQL_DIR="$1"
+SQL_DIR="${1:-queries/Usaha}"
+if [[ ! -d "$SQL_DIR" ]]; then
+  echo "SQL directory not found: $SQL_DIR" >&2
+  exit 1
+fi
 RUN_DATE="${RUN_DATE:-$(date +%d%m%Y)}"
 OUTPUT_ROOT="${OUTPUT_ROOT:-output}"
 OUTPUT_DIR="$OUTPUT_ROOT/$RUN_DATE"
