@@ -54,9 +54,9 @@ read -r -p "Log in/check SQL Lab in Chrome, then press Enter to run all queries.
 
 for sql_path in "${SQL_FILES[@]}"; do
   query_name="$(basename "$sql_path" .sql)"
-  merged_csv="$OUTPUT_DIR/${query_name}_${RUN_DATE}.csv"
+  excel_output="$OUTPUT_DIR/${query_name}_${RUN_DATE}.xlsx"
 
-  if [[ -f "$merged_csv" && "${FORCE:-0}" != "1" ]]; then
+  if [[ -f "$excel_output" && "${FORCE:-0}" != "1" ]]; then
     echo "Skipping completed query: $sql_path"
     continue
   fi
@@ -78,7 +78,6 @@ for sql_path in "${SQL_FILES[@]}"; do
     --cdp-url "$CDP_URL" \
     --pagination auto \
     --page-size "$PAGE_SIZE" \
-    --merged-csv "$merged_csv" \
     --timeout "${TIMEOUT:-900}" \
     --reload-after "${RELOAD_AFTER:-360}" \
     --reload-wait-min "${RELOAD_WAIT_MIN:-3}" \
@@ -87,7 +86,10 @@ for sql_path in "${SQL_FILES[@]}"; do
     --max-retries "${MAX_RETRIES:-20}" \
     "${resume_args[@]}"
 
-  echo "Finished: $merged_csv"
+  uv run python merge_csv_to_excel.py \
+    "$OUTPUT_DIR/$query_name" \
+    --output "$excel_output"
+  echo "Finished: $excel_output"
 done
 
 echo "All SQL queries completed."

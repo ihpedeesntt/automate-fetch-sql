@@ -39,4 +39,4 @@ ORDER BY
     roott.level_6_full_code,
     roott.nama_kk,
     roott.no_kk
-LIMIT 9000 OFFSET 0;
+LIMIT 1000 OFFSET 0;

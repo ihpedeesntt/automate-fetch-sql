@@ -6,8 +6,8 @@ SELECT
     CONCAT_WS(', ',
         CASE WHEN roott.jumlah_lahan_new > 9 
              THEN 'S1' END,
-        CASE WHEN roott.jumlah_lahan_new > 0 AND roott.nilai_lahan = 0 
-             THEN 'S2' END,
+      --  CASE WHEN roott.jumlah_lahan_new > 0 AND roott.nilai_lahan = 0 
+        --     THEN 'S2' END,
         CASE WHEN roott.jumlah_lahan_new > 0 
               AND (roott.nilai_lahan / roott.jumlah_lahan_new) < 1000000 
              THEN 'S3' END,
@@ -27,7 +27,7 @@ SELECT
 FROM tgr_fd68e454.root_table roott
 WHERE (
         roott.jumlah_lahan_new > 9
-     OR (roott.jumlah_lahan_new > 0 AND roott.nilai_lahan = 0)
+    -- OR (roott.jumlah_lahan_new > 0 AND roott.nilai_lahan = 0)
      OR (roott.jumlah_lahan_new > 0 AND (roott.nilai_lahan / roott.jumlah_lahan_new) < 1000000)
      OR (roott.jumlah_lahan_new > 0 AND (roott.nilai_lahan / roott.jumlah_lahan_new) > 5000000000)
   )
