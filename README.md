@@ -11,7 +11,7 @@ run_sqllab_cdp_batch.sh   Directory batch launcher
 run_sqllab_cdp_batch.ps1  Windows PowerShell batch launcher
 merge_csv_to_excel.py     Optional Excel conversion
 archive/legacy-scripts/   Older launcher variants
-output/                   Generated pages, checkpoints, and CSVs
+output/                   Generated pages, checkpoints, and Excel files
 ```
 
 
@@ -67,12 +67,14 @@ Jika mau run SQL secara batch, parameter argumen adalah direktori SQL
 For query `Keluarga_Ditemukan_Baru.sql` on `15082026`:
 
 ```text
-output/15082026/Keluarga_Ditemukan_Baru_15082026.csv
+output/15082026/Keluarga_Ditemukan_Baru_15082026.xlsx
 output/15082026/Keluarga_Ditemukan_Baru/pages/page-0000.csv
 output/15082026/Keluarga_Ditemukan_Baru/checkpoint.json
 ```
 
-The batch launcher skips a query when its final CSV already exists. Restart
+The launchers convert each completed query's page CSVs into an Excel workbook,
+with values stored as text. They skip a query when its final `.xlsx` already
+exists. Restart
 completed queries from page 0 with:
 
 ```bash
@@ -91,6 +93,5 @@ MAX_RETRIES=20
 ```
 
 NOTE : Ketika membuka SQLLAB pastikan limit sudah diset menjadi 10000 dan sebaiknya gunakan tab kosong
-
 
 

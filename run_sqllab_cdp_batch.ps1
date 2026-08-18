@@ -84,9 +84,9 @@ Read-Host "Log in/check SQL Lab in Chrome, then press Enter to run all queries"
 
 foreach ($SqlFile in $SqlFiles) {
     $QueryName = $SqlFile.BaseName
-    $MergedCsv = Join-Path $OutputDir ("{0}_{1}.csv" -f $QueryName, $RunDate)
+    $ExcelOutput = Join-Path $OutputDir ("{0}_{1}.xlsx" -f $QueryName, $RunDate)
 
-    if ((Test-Path -LiteralPath $MergedCsv) -and -not $Force) {
+    if ((Test-Path -LiteralPath $ExcelOutput) -and -not $Force) {
         Write-Host "Skipping completed query: $($SqlFile.FullName)"
         continue
     }
@@ -112,7 +112,6 @@ foreach ($SqlFile in $SqlFiles) {
         "--cdp-url", $CdpUrl,
         "--pagination", "auto",
         "--page-size", "$PageSize",
-        "--merged-csv", $MergedCsv,
         "--timeout", "$Timeout",
         "--reload-after", "$ReloadAfter",
         "--reload-wait-min", "$ReloadWaitMin",
@@ -125,7 +124,12 @@ foreach ($SqlFile in $SqlFiles) {
     if ($LASTEXITCODE -ne 0) {
         throw "Query failed: $($SqlFile.FullName)"
     }
-    Write-Host "Finished: $MergedCsv"
+
+    & uv run python merge_csv_to_excel.py (Join-Path $OutputDir $QueryName) --output $ExcelOutput
+    if ($LASTEXITCODE -ne 0) {
+        throw "Excel conversion failed: $($SqlFile.FullName)"
+    }
+    Write-Host "Finished: $ExcelOutput"
 }
 
 Write-Host "All SQL queries completed."

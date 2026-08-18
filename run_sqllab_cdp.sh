@@ -11,6 +11,7 @@ RUN_DATE="${RUN_DATE:-$(date +%d%m%Y)}"
 OUTPUT_ROOT="${OUTPUT_ROOT:-output}"
 OUTPUT_DIR="$OUTPUT_ROOT/$RUN_DATE"
 QUERY_NAME="$(basename "$SQL_FILE" .sql)"
+EXCEL_OUTPUT="$OUTPUT_DIR/${QUERY_NAME}_${RUN_DATE}.xlsx"
 CDP_URL="${CDP_URL:-http://127.0.0.1:9222}"
 CHROME_USER_DATA_DIR="${CHROME_USER_DATA_DIR:-$HOME/.chrome-sqllab-cdp}"
 CHROME_LOG="${CHROME_LOG:-/tmp/sqllab-chrome.log}"
@@ -47,10 +48,14 @@ uv run python fetch_sqllab.py \
   --cdp-url "$CDP_URL" \
   --pagination "${PAGINATION:-auto}" \
   --page-size "${PAGE_SIZE:-9000}" \
-  --merged-csv "$OUTPUT_DIR/${QUERY_NAME}_${RUN_DATE}.csv" \
   --timeout "${TIMEOUT:-900}" \
   --reload-after "${RELOAD_AFTER:-360}" \
   --reload-wait-min "${RELOAD_WAIT_MIN:-3}" \
   --reload-wait-max "${RELOAD_WAIT_MAX:-15}" \
   --delay "${DELAY:-15}" \
   --max-retries "${MAX_RETRIES:-20}"
+
+uv run python merge_csv_to_excel.py \
+  "$OUTPUT_DIR/$QUERY_NAME" \
+  --output "$EXCEL_OUTPUT"
+echo "Finished: $EXCEL_OUTPUT"
