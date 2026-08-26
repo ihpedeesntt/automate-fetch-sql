@@ -3,7 +3,8 @@ SELECT filter.KODE_KAB, filter.KODE_KEC, filter.NAMA_KEC,
     filter.nama_usaha,
     filter.asing,
     filter.badan_usaha_value,
-    filter.badan_usaha_label
+    filter.badan_usaha_label,
+    filter.KODE_ANOMALI
 
 FROM (
     SELECT  
@@ -18,7 +19,8 @@ FROM (
         nama_usaha,
         asing,
         badan_usaha_value,
-        badan_usaha_label
+        badan_usaha_label,
+        'SE17' AS KODE_ANOMALI
     FROM  tgr_fd68e454.se2026_nested  a
     INNER JOIN tgr_fd68e454.USAHA_REF u 
       ON a.assignment_id = u.assignment_id AND a.assignment_date_modified = u.assignment_date_modified

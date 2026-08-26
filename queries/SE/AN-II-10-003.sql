@@ -1,6 +1,7 @@
 SELECT filter.KODE_KAB, filter.KODE_KEC, filter.NAMA_KEC, 
     filter.KODE_DESA, filter.NAMA_DESA, filter.KODE_SLS, filter.NAMA_SLS, filter.KODE_SUBSLS,
-    filter.nib, filter.nama_usaha
+    filter.nib, filter.nama_usaha,
+    filter.KODE_ANOMALI
 
 FROM (
     SELECT  
@@ -13,7 +14,8 @@ FROM (
         a.level_5_name AS 'NAMA_SLS',
         a.level_6_full_code AS 'KODE_SUBSLS', 
         a.nib,
-        a.nama_usaha
+        a.nama_usaha,
+        'SE2' AS KODE_ANOMALI
     FROM tgr_fd68e454.se2026_nested a
     INNER JOIN tgr_fd68e454.USAHA_REF u 
       ON a.assignment_id = u.assignment_id AND a.assignment_date_modified = u.assignment_date_modified

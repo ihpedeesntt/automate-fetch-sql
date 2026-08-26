@@ -2,7 +2,8 @@ SELECT filter.KODE_KAB, filter.KODE_KEC, filter.NAMA_KEC,
     filter.KODE_DESA, filter.NAMA_DESA, filter.KODE_SLS, filter.NAMA_SLS, filter.KODE_SUBSLS,
     filter.nama_usaha,
     filter.total_tk_jk,
-    filter.digital_value
+    filter.digital_value,
+    filter.KODE_ANOMALI
 
 FROM (
     SELECT  
@@ -17,7 +18,8 @@ FROM (
         
         nama_usaha,
         total_tk_jk,
-        digital_value
+        digital_value,
+        'SE8' AS KODE_ANOMALI
         
     FROM  tgr_fd68e454.se2026_nested  a
     INNER JOIN tgr_fd68e454.USAHA_REF u 

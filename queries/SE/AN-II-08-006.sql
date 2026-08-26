@@ -1,6 +1,7 @@
 SELECT filter.KODE_KAB, filter.KODE_KEC, filter.NAMA_KEC, 
     filter.KODE_DESA, filter.NAMA_DESA, filter.KODE_SLS, filter.NAMA_SLS, filter.KODE_SUBSLS,
     filter.nama_usaha, filter.jenis_usaha_value, filter.jenis_kawasan_value
+    filter.KODE_ANOMALI
 
 FROM (
     SELECT  
@@ -14,7 +15,8 @@ FROM (
         a.level_6_full_code AS 'KODE_SUBSLS', 
         nama_usaha,
         jenis_usaha_value,
-        jenis_kawasan_value
+        jenis_kawasan_value,
+        'SE1' AS KODE_ANOMALI
     FROM  tgr_fd68e454.se2026_nested  a
     INNER JOIN USAHA_REF u
         ON a.assignment_id = u.assignment_id
@@ -24,10 +26,10 @@ FROM (
 ) AS filter
 
 ORDER BY 
-    a.level_2_full_code,
-    a.level_3_full_code, a.level_3_name,
-    a.level_4_full_code, a.level_4_name,
-    a.level_5_full_code, a.level_5_name,
-    a.level_6_full_code
+    filter.KODE_KAB,
+    filter.KODE_KEC, filter.NAMA_KEC,
+    filter.KODE_DESA, filter.NAMA_DESA,
+    filter.KODE_SLS, filter.NAMA_SLS,
+    filter.KODE_SUBSLS
 
 LIMIT 9000 OFFSET 0

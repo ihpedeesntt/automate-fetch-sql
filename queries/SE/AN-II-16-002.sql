@@ -7,7 +7,8 @@ SELECT filter.KODE_KAB, filter.KODE_KEC, filter.NAMA_KEC,
     filter.internet_distribusi_value,
     filter.internet_beli_value,
     filter.internet_promosi_value,
-    filter.internet_lainnya_value
+    filter.internet_lainnya_value,
+    filter.KODE_ANOMALI
 
 FROM (
     SELECT  
@@ -26,7 +27,8 @@ FROM (
         internet_distribusi_value,
         internet_beli_value,
         internet_promosi_value,
-        internet_lainnya_value
+        internet_lainnya_value,
+        'SE7' AS KODE_ANOMALI
     FROM  tgr_fd68e454.se2026_nested  a
     INNER JOIN tgr_fd68e454.USAHA_REF u 
       ON a.assignment_id = u.assignment_id AND a.assignment_date_modified = u.assignment_date_modified
