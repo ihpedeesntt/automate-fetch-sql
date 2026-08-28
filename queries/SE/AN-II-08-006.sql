@@ -1,6 +1,6 @@
 SELECT filter.KODE_KAB, filter.KODE_KEC, filter.NAMA_KEC, 
     filter.KODE_DESA, filter.NAMA_DESA, filter.KODE_SLS, filter.NAMA_SLS, filter.KODE_SUBSLS,
-    filter.nama_usaha, filter.jenis_usaha_value, filter.jenis_kawasan_value
+    filter.nama_usaha, filter.jenis_usaha_value, filter.jenis_kawasan_value,
     filter.KODE_ANOMALI
 
 FROM (
@@ -27,9 +27,12 @@ FROM (
 
 ORDER BY 
     filter.KODE_KAB,
-    filter.KODE_KEC, filter.NAMA_KEC,
-    filter.KODE_DESA, filter.NAMA_DESA,
-    filter.KODE_SLS, filter.NAMA_SLS,
+    filter.KODE_KEC, 
+    filter.NAMA_KEC,
+    filter.KODE_DESA, 
+    filter.NAMA_DESA,
+    filter.KODE_SLS, 
+    filter.NAMA_SLS,
     filter.KODE_SUBSLS
 
 LIMIT 9000 OFFSET 0

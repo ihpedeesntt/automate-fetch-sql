@@ -7,7 +7,9 @@ SELECT DISTINCT
     root.nama_kk as "Nama KK Berusaha",
     root.nama_usaha_bang as "Nama Bangunan Usaha",
     usaha.nama_usaha as "Nama Usaha",
+    usaha.idsbr as "ID SBR",
     root.no_bang as "Nomor Bangunan",
+    root.ada_keluarga_label as "Status Keluarga",
     root.ada_bang_usaha_label as "Status Usaha",
     usaha.keberadaan_usaha_label as "Keberadaan Usaha",
     root.kode_bang_label as "Penggunaan Bangunan",
@@ -25,9 +27,9 @@ SELECT DISTINCT
     CONCAT("https://fasih-sm.bps.go.id/app/assignment/fd68e454-ba45-4b85-8205-f3bf777ded24/",root.assignment_id) AS "Link Assignment"
 FROM tgr_fd68e454.root_table root
 LEFT JOIN tgr_fd68e454.se2026_nested usaha ON root.assignment_id = usaha.assignment_id 
-WHERE root.level_2_full_code = 5371 AND root.assignment_status_id <> 0 AND (root.ada_bang_usaha_label IS NOT NULL OR usaha.keberadaan_usaha_label IS NOT NULL)
-AND root.level_6_full_code <> 5371000000000000
+WHERE root.assignment_status_id = 2 AND (root.ada_bang_usaha_label IS NOT NULL OR usaha.keberadaan_usaha_label IS NOT NULL)
+AND usaha.idsbr IS NOT NULL
 ORDER BY
     root.level_6_full_code DESC,
     root.nama_usaha_bang
-LIMIT 31000, 1000;
+LIMIT 306000, 9000;
