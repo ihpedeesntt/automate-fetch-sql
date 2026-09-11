@@ -48,9 +48,9 @@ tdk_ditemukan AS (
           OR root.ada_keluarga_value = '0'
       )
       AND NOT (
-        TRIM(COALESCE(root.nik_prelist, root.nik)) LIKE '%9999%'
-        OR TRIM(COALESCE(root.nik_prelist, root.nik)) LIKE '%7777%'
-    )
+          TRIM(COALESCE(root.nik_prelist, root.nik)) LIKE '%9999%'
+          OR TRIM(COALESCE(root.nik_prelist, root.nik)) LIKE '%7777%'
+      )
 ),
 
 ditemukan AS (
@@ -63,9 +63,9 @@ ditemukan AS (
         root.level_4_name,
         root.level_6_full_code,
         root.level_6_name,
-        COALESCE(root.nama_kk, a.data1) AS nama_kk,
-        COALESCE(root.nik_kk, root.nik) AS nik,
-        root.alamat_prelist,
+        COALESCE(art.nama_dtsen, art.nama_dtsen_edit) AS nama_art,
+        COALESCE(art.nik_dtsen, art.nik_dtsen_prelist) AS nik,
+        art.hubungan_label,
         root.catatan,
         root.assignment_id,
         root.assignment_status_alias,
@@ -80,6 +80,8 @@ ditemukan AS (
     INNER JOIN aktif a
         ON a.assignment_id = root.assignment_id
        AND a.assignment_date_modified = root.assignment_date_modified
+    INNER JOIN tgr_fd68e454.nested_dtsen art
+        ON root.assignment_id = art.assignment_id
     WHERE IFNULL(root.jenis_prelist, '') <> 'dummy'
       AND (
           root.jenis_prelist = 'keluarga'
@@ -88,13 +90,17 @@ ditemukan AS (
       )
       AND (
           root.ada_keluarga_label NOT LIKE '%Tidak Ditemukan%'
-          OR root.ada_keluarga_value NOT IN ('00', '0')
+          AND root.ada_keluarga_value NOT IN ('00', '0')
       )
-      AND LENGTH(TRIM(COALESCE(root.nik_prelist, root.nik))) = 16
+      AND LENGTH(
+          TRIM(COALESCE(art.nik_dtsen, art.nik_dtsen_prelist))
+      ) = 16
       AND NOT (
-        TRIM(COALESCE(root.nik_prelist, root.nik)) LIKE '%9999%'
-        OR TRIM(COALESCE(root.nik_prelist, root.nik)) LIKE '%7777%'
-    )
+          TRIM(COALESCE(root.nik_prelist, root.nik)) LIKE '%9999%'
+          OR TRIM(COALESCE(root.nik_prelist, root.nik)) LIKE '%7777%'
+          OR TRIM(COALESCE(art.nik_dtsen, art.nik_dtsen_prelist)) LIKE '%9999%'
+          OR TRIM(COALESCE(art.nik_dtsen, art.nik_dtsen_prelist)) LIKE '%7777%'
+      )
 )
 
 SELECT
@@ -114,14 +120,19 @@ SELECT
     tdk.alamat_prelist AS "ALAMAT KK TDK DITEMUKAN",
     tdk.ada_keluarga_label AS "STATUS KK TDK DITEMUKAN",
 
-    d.nama_kk AS "NAMA KK DITEMUKAN",
-    d.nik AS "NIK KK",
+    d.nama_art AS "NAMA ART DITEMUKAN",
+    d.nik AS "NIK ART",
+    d.hubungan_label,
+
     d.level_2_full_code AS "KODE KAB DITEMUKAN",
     d.level_2_name AS "KAB DITEMUKAN",
+
     d.level_3_code AS "KODE KEC DITEMUKAN",
     d.level_3_name AS "KEC DITEMUKAN",
+
     d.level_4_code AS "KODE DESA DITEMUKAN",
     d.level_4_name AS "DESA DITEMUKAN",
+
     d.level_6_full_code AS "KODE SLS DITEMUKAN",
     d.ada_keluarga_label AS "STATUS KK DITEMUKAN",
 
