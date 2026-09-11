@@ -33,6 +33,6 @@ ORDER BY
     filter.NAMA_DESA,
     filter.KODE_SLS, 
     filter.NAMA_SLS,
-    filter.KODE_SUBSLS;
+    filter.KODE_SUBSLS
 
 LIMIT 9000 OFFSET 0

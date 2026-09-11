@@ -4,7 +4,7 @@ SELECT filter.KODE_KAB, filter.KODE_KEC, filter.NAMA_KEC,
     filter.jaringan_value,
     filter.kategori,
     filter.kbli_value,
-    filter.kbli_genai,
+    filter.kbli_genai_value,
     filter.KODE_ANOMALI
 
 FROM (
@@ -21,12 +21,12 @@ FROM (
         jaringan_value,
         kategori,
         kbli_value,
-        kbli_genai,
+        kbli_genai_value,
         'SE6' AS KODE_ANOMALI
     FROM  tgr_fd68e454.se2026_nested  a
     INNER JOIN tgr_fd68e454.USAHA_REF u 
       ON a.assignment_id = u.assignment_id AND a.assignment_date_modified = u.assignment_date_modified
-    WHERE jaringan_value = 2 AND (kategori <> 'N' AND COALESCE(kbli_value, kbli_genai) <> '70100' )
+    WHERE jaringan_value = 2 AND (kategori <> 'N' AND COALESCE(kbli_value, kbli_genai_value) <> '70100' )
 ) AS filter
 
 ORDER BY 
